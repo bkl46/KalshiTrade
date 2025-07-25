@@ -1,58 +1,75 @@
-import requests
+import time
+import base64
 import yaml
-import os
+import requests
+from urllib.parse import urlparse
+from pathlib import Path
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding, serialization
+from cryptography.hazmat.backends import default_backend
+
 
 class KalshiAPI:
     def __init__(self, config_path="config/settings.yaml"):
         self.base_url = "https://trading-api.kalshi.com/trade-api/v2"
         self.session = requests.Session()
         self.load_credentials(config_path)
-        self.authenticate()
+        self.load_private_key()
 
     def load_credentials(self, config_path):
         with open(config_path, "r") as f:
             config = yaml.safe_load(f)
-        self.email = config["kalshi"]["email"]
-        self.password = config["kalshi"]["password"]
+        self.key_id = config["kalshi"]["key_id"]
+        self.private_key_path = config["kalshi"]["private_key_path"]
 
-    def authenticate(self):
-        url = f"{self.base_url}/login"
-        response = self.session.post(url, json={
-            "email": self.email,
-            "password": self.password
-        })
-        response.raise_for_status()
-        token = response.json()["token"]
-        self.session.headers.update({"Authorization": f"Bearer {token}"})
+    def load_private_key(self):
+        with open(self.private_key_path, "rb") as key_file:
+            self.private_key = serialization.load_pem_private_key(
+                key_file.read(),
+                password=None,
+                backend=default_backend()
+            )
 
-    def get_all_markets(self, category=None):
-        url = f"{self.base_url}/markets"
-        params = {}
-        if category:
-            params["category"] = category
-        response = self.session.get(url, params=params)
-        response.raise_for_status()
-        return response.json()["markets"]
+    def _sign_request(self, method, path):
+        timestamp = str(int(time.time() * 1000))  
+        sign_string = f"{timestamp}{method.upper()}{path}"
+        signature = self.private_key.sign(
+            sign_string.encode(),
+            padding.PKCS1v15(),
+            hashes.SHA256()
+        )
+        signature_b64 = base64.b64encode(signature).decode()
+        return timestamp, signature_b64
 
-    def get_market_details(self, market_ticker):
-        url = f"{self.base_url}/markets/{market_ticker}"
-        response = self.session.get(url)
+    def _request(self, method, endpoint, **kwargs):
+        path = urlparse(endpoint).path
+        timestamp, signature = self._sign_request(method, path)
+
+        headers = {
+            "KALSHI-ACCESS-KEY": self.key_id,
+            "KALSHI-ACCESS-TIMESTAMP": timestamp,
+            "KALSHI-ACCESS-SIGNATURE": signature
+        }
+        if "headers" in kwargs:
+            kwargs["headers"].update(headers)
+        else:
+            kwargs["headers"] = headers
+
+        url = self.base_url + endpoint
+        response = self.session.request(method, url, **kwargs)
         response.raise_for_status()
         return response.json()
 
-    def get_orderbook(self, market_ticker):
-        url = f"{self.base_url}/orderbooks/{market_ticker}"
-        response = self.session.get(url)
-        response.raise_for_status()
-        return response.json()
 
-    def get_contracts(self, market_ticker):
-        url = f"{self.base_url}/markets/{market_ticker}/contracts"
-        response = self.session.get(url)
-        response.raise_for_status()
-        return response.json()["contracts"]
+    def get_all_markets(self):
+        return self._request("GET", "/markets")["markets"]
 
-    # Placeholder for future:
-    def place_order(self, contract_id, side, quantity, price):
-        pass  # We’ll fill this in later
+    def get_market_details(self, ticker):
+        return self._request("GET", f"/markets/{ticker}")
+
+    def get_orderbook(self, ticker):
+        return self._request("GET", f"/orderbooks/{ticker}")
+
+    def get_contracts(self, ticker):
+        return self._request("GET", f"/markets/{ticker}/contracts")["contracts"]
 
