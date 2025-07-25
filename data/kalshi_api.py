@@ -5,13 +5,14 @@ import requests
 from urllib.parse import urlparse
 from pathlib import Path
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import padding, serialization
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
 
 
 class KalshiAPI:
     def __init__(self, config_path="config/settings.yaml"):
-        self.base_url = "https://trading-api.kalshi.com/trade-api/v2"
+        self.base_url = "https://api.elections.kalshi.com/trade-api/v2"
         self.session = requests.Session()
         self.load_credentials(config_path)
         self.load_private_key()
@@ -33,6 +34,9 @@ class KalshiAPI:
     def _sign_request(self, method, path):
         timestamp = str(int(time.time() * 1000))  
         sign_string = f"{timestamp}{method.upper()}{path}"
+        
+        print(f"Debug - Signing: '{sign_string}'")
+        
         signature = self.private_key.sign(
             sign_string.encode(),
             padding.PKCS1v15(),
@@ -50,6 +54,9 @@ class KalshiAPI:
             "KALSHI-ACCESS-TIMESTAMP": timestamp,
             "KALSHI-ACCESS-SIGNATURE": signature
         }
+        
+        print(f"Debug - Headers: {headers}")
+        
         if "headers" in kwargs:
             kwargs["headers"].update(headers)
         else:
@@ -57,6 +64,8 @@ class KalshiAPI:
 
         url = self.base_url + endpoint
         response = self.session.request(method, url, **kwargs)
+        
+        print(f"Response text: {response.text}")
         response.raise_for_status()
         return response.json()
 
