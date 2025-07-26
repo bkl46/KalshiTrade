@@ -65,7 +65,7 @@ class KalshiAPI:
         url = self.base_url + endpoint
         response = self.session.request(method, url, **kwargs)
         
-        print(f"Response text: {response.text}")
+    
         response.raise_for_status()
         return response.json()
 
