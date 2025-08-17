@@ -4,7 +4,7 @@ def print_all_market_titles():
     api = KalshiAPI()
     all_markets = api.get_all_markets()
 
-    print(f"\n🧾 Found {len(all_markets)} total markets:\n")
+    print(f"\n Found {len(all_markets)} total markets:\n")
     for m in all_markets:
         title = m.get("title", "[no title]")
         ticker = m.get("ticker", "[no ticker]")

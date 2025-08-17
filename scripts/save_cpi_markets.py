@@ -1,7 +1,9 @@
+# scripts/filter_markets.py
+
 import json
 from kalshi_api import KalshiAPI
 
-KEYWORDS = ["CPI", "inflation", "consumer price", "core CPI"]
+FILTER_KEYWORDS = ["ECB", "interest", "rate", "Sep", "2025", "temperature", "weather"]
 
 def filter_markets_by_keywords(markets, keywords):
     def contains_keyword(text):
@@ -21,24 +23,24 @@ def enrich_market_data(api, market):
         market["contracts"] = contracts
         market["orderbook"] = orderbook
     except Exception as e:
-        print(f"Error fetching contracts/orderbook for {ticker}: {e}")
+        print(f"Error enriching {ticker}: {e}")
     return market
 
-def save_to_file(markets, filename="data/cpi_markets.json"):
+def save_to_file(markets, filename="data/filtered_markets.json"):
     with open(filename, "w") as f:
         json.dump(markets, f, indent=2)
-    print(f"Saved {len(markets)} CPI markets to {filename}")
+    print(f" Saved {len(markets)} markets to {filename}")
 
 def main():
     api = KalshiAPI()
-    print("Fetching all markets...")
+    print(" Fetching all markets...")
     all_markets = api.get_all_markets()
 
-    print("Filtering CPI-related markets...")
-    cpi_markets = filter_markets_by_keywords(all_markets, KEYWORDS)
+    print(" Filtering markets by keywords:", FILTER_KEYWORDS)
+    filtered_markets = filter_markets_by_keywords(all_markets, FILTER_KEYWORDS)
 
-    print(f"Found {len(cpi_markets)} CPI markets. Enriching...")
-    enriched = [enrich_market_data(api, m) for m in cpi_markets]
+    print(f" Enriching {len(filtered_markets)} markets with contract/orderbook data...")
+    enriched = [enrich_market_data(api, m) for m in filtered_markets]
 
     save_to_file(enriched)
 
